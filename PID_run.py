@@ -4,12 +4,12 @@ from PIDCon import PIDController
 
 
 def run_pid_simulation(
-        env : DroneLandingEnv,
-        pid : PIDController,
-        init_mode  :str,
-        init_pos : list[float] = None,
-        plot=True,
-    verbose = False,
+    env: DroneLandingEnv,
+    pid: PIDController,
+    init_mode: str,
+    init_pos: list[float] = None,
+    plot=True,
+    verbose=False,
 ):
     """
     Run a PID-controlled landing simulation.
@@ -34,23 +34,26 @@ def run_pid_simulation(
     done = False
     states = []
 
-
     last_action = np.zeros(4)
     step_count = 0
 
     while not done:
         pos = obs[:4]  # [x,y,z,theta]
         error = env.target - pos
+        if verbose:
+            print("error", error)
 
         # Controller update
         if step_count % steps_per_ctrl == 0:
             theta = pos[3]
+            if verbose:
+                print("theta", theta)
             world_cmd = pid.compute(error)
             last_action = pid.rotate(world_cmd, theta)
 
         # Step simulation
         if verbose:
-            print(last_action)
+            print("action", last_action)
         obs, reward, terminated, truncated, info = env.step(last_action)
         states.append(obs.copy())
         step_count += 1
@@ -70,23 +73,25 @@ def run_pid_simulation(
 
 
 def run_noisy_pid_simulation(
-        env : DroneLandingEnv,
-        pid : PIDController,
-        init_mode: str,
-        init_pos: list[float] = None,
-        random_init=False,
-        plot=True,
-        max_delay_steps = 2 , # 1 or 2 sim steps additional delay
-        p_loss = 0.1,      # packet loss probability
-        wind_std=[0.1, 0.1, 0.02, 0.05],
-        noise_std = 0.01,
+    env: DroneLandingEnv,
+    pid: PIDController,
+    init_mode: str,
+    init_pos: list[float] = None,
+    random_init=False,
+    plot=True,
+    max_delay_steps=2,  # 1 or 2 sim steps additional delay
+    p_loss=0.1,  # packet loss probability
+    wind_type="off",
+    wind_std=[0.1, 0.1, 0.02, 0.05],
+    noise_std=0.01,
+    verbose=False,
 ):
-    
+
     steps_per_ctrl = int(pid.dt / env.dt)
     obs, info = env.reset(init_mode=init_mode, init_pos=init_pos)
     done = False
     states = []
-    
+
     # Initialize control
     last_action = np.zeros(4)  # last applied action
     pending_actions = []  # queue of (time_to_apply, action)
@@ -107,6 +112,8 @@ def run_noisy_pid_simulation(
             theta = pos[3]
             world_cmd = pid.compute(noisy_error)
             body_cmd = pid.rotate(world_cmd, theta)
+            if verbose :
+                print("body_cmd",body_cmd)
 
             # Packet loss check
             if np.random.rand() > p_loss:
@@ -124,7 +131,9 @@ def run_noisy_pid_simulation(
             _, last_action = pending_actions.pop(0)
 
         # Step simulation with wind
-        obs, reward, terminated, truncated, info = env.step(last_action, wind_std=wind_std)
+        obs, reward, terminated, truncated, info = env.step(
+            last_action, wind_std=wind_std
+        )
         states.append(obs.copy())
         step_count += 1
         done = terminated or truncated
